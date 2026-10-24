@@ -96,7 +96,7 @@ static bool metal_tint_active(void) {
         if (!np->connected || np == local) { continue; }
         if (np->currCourseNum == local->currCourseNum &&
             np->currActNum    == local->currActNum &&
-            np->currLevelNum  == local->currLevelNum {
+            np->currLevelNum  == local->currLevelNum) {
             sActive = true;
             break;
         }
