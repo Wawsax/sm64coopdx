@@ -77,6 +77,33 @@ static s8 gMarioAttackScaleAnimation[3 * 6] = {
     10, 12, 16, 24, 10, 10, 10, 14, 20, 30, 10, 10, 10, 16, 20, 26, 26, 20,
 };
 
+// Adding another tint slot for the Metal power-up, for default white/transparent,
+// and checking for other players in the level before applying the cap tint
+#define METAL_LIGHT_SLOT 19
+// True if there's another player in the same course/act/level
+static bool metal_tint_active(void) {
+    static u32 sLastTimer = (u32)-1;
+    static bool sActive = false;
+    if (sLastTimer == gGlobalTimer) { return sActive; }
+    sLastTimer = gGlobalTimer;
+    sActive = false;
+
+    struct NetworkPlayer* local = gNetworkPlayerLocal;
+    if (local == NULL) { return false; }
+
+    for (s32 i = 0; i < MAX_PLAYERS; i++) {
+        struct NetworkPlayer* np = &gNetworkPlayers[i];
+        if (!np->connected || np == local) { continue; }
+        if (np->currCourseNum == local->currCourseNum &&
+            np->currActNum    == local->currActNum &&
+            np->currLevelNum  == local->currLevelNum {
+            sActive = true;
+            break;
+        }
+    }
+    return sActive;
+}
+
 struct MarioBodyState gBodyStates[MAX_PLAYERS];
 struct GraphNodeObject gMirrorMario[MAX_PLAYERS];  // copy of Mario's geo node for drawing mirror Mario
 struct PlayerColor gNetworkPlayerColors[MAX_PLAYERS];
@@ -829,7 +856,7 @@ void get_player_color(u8 index, u8 part, f32 *out) {
 }
 
 static Gfx *geo_mario_create_player_colors_dl(s32 index, Gfx *capEnemyGfx, Gfx *capEnemyDecalGfx) {
-    s32 size = ((PLAYER_PART_MAX * 2) + 1) + (capEnemyGfx != NULL) + (capEnemyDecalGfx != NULL);
+    s32 size = ((PLAYER_PART_MAX * 2) + 1) + 1 + (capEnemyGfx != NULL) + (capEnemyDecalGfx != NULL);
     Gfx *gfx = alloc_display_list(size * sizeof(Gfx));
     if (gfx) {
         Gfx *gfxp = gfx;
@@ -840,6 +867,19 @@ static Gfx *geo_mario_create_player_colors_dl(s32 index, Gfx *capEnemyGfx, Gfx *
             gSPLight(gfxp++, &light->l, (2 * (part + 1)) + 1);
             gSPLight(gfxp++, &light->a, (2 * (part + 1)) + 2);
         }
+        // Only tint the Metal power-up skin if there's another player in the level
+        Lights1 *metal = alloc_display_list(sizeof(Lights1));
+        if (!metal) { return NULL; }
+        if (metal_tint_active()) {
+            *metal = gNetworkPlayerColors[index].parts[CAP];
+        } else {
+            struct MarioBodyState* bodyState = &gBodyStates[index];
+            u8 r = min(bodyState->lightR, 255);
+            u8 g = min(bodyState->lightG, 255);
+            u8 b = min(bodyState->lightB, 255);
+            *metal = (Lights1) gdSPDefLights1(r, g, b, r, g, b, 0x28, 0x28, 0x28);
+        }
+        gSPLight(gfxp++, &metal->l, METAL_LIGHT_SLOT);
         if (capEnemyGfx) { gSPDisplayList(gfxp++, capEnemyGfx); }
         if (capEnemyDecalGfx) { gSPDisplayList(gfxp++, capEnemyDecalGfx); }
         gSPEndDisplayList(gfxp);
